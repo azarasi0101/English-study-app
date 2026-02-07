@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高機能 英単語学習アプリ v3 (削除機能付き)</title>
+    <style>
+        :root { --primary: #4a90e2; --danger: #e74c3c; --success: #2ecc71; --warning: #f1c40f; --bg: #f4f7f6; }
+        body { font-family: "Helvetica Neue", Arial, sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .container { width: 100%; max-width: 600px; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); padding: 20px; box-sizing: border-box; }
+        h1, h2 { text-align: center; color: #333; }
+        .btn { display: block; width: 100%; padding: 12px; margin: 8px 0; border: none; border-radius: 8px; background: var(--primary); color: white; font-size: 16px; cursor: pointer; transition: 0.2s; }
+        .btn:active { transform: scale(0.98); }
+        .btn-outline { background: white; border: 2px solid var(--primary); color: var(--primary); }
+        .btn-danger { background: var(--danger); }
+        .btn-success { background: var(--success); }
+        .hidden { display: none !important; }
+        
+        /* カードスタイル */
+        .card-area { min-height: 200px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; margin-bottom: 20px; border: 2px solid #eee; border-radius: 10px; padding: 20px; background: #fff; }
+        .word-main { font-size: 2.5rem; font-weight: bold; margin-bottom: 10px; }
+        
+        /* 4択ボタン */
+        .option-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+        .option-btn { background: white; border: 1px solid #ddd; padding: 15px; border-radius: 8px; font-size: 14px; cursor: pointer; text-align: center; }
+        .option-btn:hover { background: #f0f8ff; }
+
+        /* 入力フォーム */
+        input, select { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        .rating-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+
+        /* 単語リスト用 */
+        .word-list-container { max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 5px; }
+        .list-item { padding: 10px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+        .list-item:last-child { border-bottom: none; }
+        .list-en { font-weight: bold; color: var(--primary); }
+        .list-ja { font-size: 0.9em; color: #555; }
+        /* 削除ボタン用 */
+        .btn-delete-small { background: var(--danger); color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; margin-left: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="app">
+    <div id="screen-menu">
+        <h1>学習メニュー</h1>
+        <div id="mode-select">
+            <button class="btn" onclick="showSubMenu('vocab')">英単語</button>
+            <button class="btn btn-outline" onclick="alert('英文法モードは現在準備中です')">英文法</button>
+        </div>
+    </div>
+
+    <div id="screen-vocab-menu" class="hidden">
+        <h2>英単語メニュー</h2>
+        <button class="btn" onclick="showSettings('memorize')">単語を暗記</button>
+        <button class="btn" onclick="showTestMenu()">単語テスト</button>
+        <button class="btn btn-success" onclick="startDailySetFlow()">本日のセット (Start)</button>
+        <button class="btn" onclick="showWordListScreen()">登録単語を確認・削除</button> <button class="btn" onclick="showAddWordMenu()">新たに単語を追加</button>
+        <button class="btn" onclick="showDailySettings()">本日のセットを設定</button>
+        <button class="btn btn-warning" onclick="startWeakCheck()">苦手チェック</button>
+        <button class="btn btn-danger" onclick="showOtherMenu()">その他</button>
+        <button class="btn btn-outline" onclick="goHome()">戻る</button>
+    </div>
+
+    <div id="screen-settings" class="hidden">
+        <h2 id="settings-title">設定</h2>
+        <label>教材選択</label>
+        <select id="book-select"></select>
+        <label>範囲 (Start - End)</label>
+        <div style="display:flex; gap:10px;">
+            <input type="number" id="range-start" value="1">
+            <input type="number" id="range-end" value="50">
+        </div>
+        <label>出題形式</label>
+        <select id="question-direction">
+            <option value="en-ja">英語 → 日本語</option>
+            <option value="ja-en">日本語 → 英語</option>
+        </select>
+        <button class="btn" onclick="startMemorizeMode()">スタート</button>
+        <button class="btn btn-outline" onclick="goBackToVocab()">戻る</button>
+    </div>
+
+    <div id="screen-memorize" class="hidden">
+        <div style="text-align:right;">残り: <span id="mem-count">0</span></div>
+        <div class="card-area" onclick="flipCard()">
+            <div id="mem-q">Question</div>
+            <div id="mem-a" class="hidden">Answer</div>
+            <p id="mem-hint" style="font-size:0.8rem; color:#999; margin-top:20px;">タップして答えを表示</p>
+        </div>
+        <div id="mem-rating" class="hidden">
+            <div class="rating-btns">
+                <button class="btn btn-success" onclick="rateWord(5)">すぐにわかった</button>
+                <button class="btn btn-outline" onclick="rateWord(4)">わかった</button>
+                <button class="btn btn-warning" onclick="rateWord(2)">答えを見て思い出した</button>
+                <button class="btn btn-danger" onclick="rateWord(1)">わからなかった</button>
+            </div>
+        </div>
+        <button id="mem-back" class="btn btn-outline" onclick="goBackToVocab()" style="margin-top:20px;">中断する</button>
+    </div>
+
+    <div id="screen-test-menu" class="hidden">
+        <h2>単語テスト選択</h2>
+        <button class="btn" onclick="setupTest('choice', 'en-ja')">4択 (英→日)</button>
+        <button class="btn" onclick="setupTest('choice', 'ja-en')">4択 (日→英)</button>
+        <button class="btn" onclick="setupTest('spell', 'ja-en')">スペルテスト</button>
+        <button class="btn btn-warning" onclick="setupReviewTest()">間違えた問題を復習</button>
+        <button class="btn btn-outline" onclick="goBackToVocab()">戻る</button>
+    </div>
+
+    <div id="screen-test-run" class="hidden">
+        <div style="display:flex; justify-content:space-between;">
+            <span>Mode: <span id="test-mode-label">Test</span></span>
+            <span><span id="test-current">1</span> / <span id="test-total">10</span></span>
+        </div>
+        <div class="card-area">
+            <div id="test-q" class="word-main">Question</div>
+        </div>
+
+        <div id="area-choice" class="option-grid hidden"></div>
+
+        <div id="area-spell" class="hidden">
+            <input type="text" id="spell-input" placeholder="ここにスペルを入力 (Enterで回答)" autocomplete="off">
+            <button id="btn-spell-answer" class="btn" onclick="checkSpell()">回答する</button>
+        </div>
+
+        <div id="test-feedback" class="hidden" style="text-align:center; font-weight:bold; margin:10px;"></div>
+        <button id="test-next-btn" class="btn hidden" onclick="nextTestProblem()">次へ</button>
+    </div>
+
+    <div id="screen-add" class="hidden">
+        <h2>単語を追加</h2>
+        <div style="border-bottom:1px solid #ccc; padding-bottom:10px; margin-bottom:10px;">
+            <h3>Excel(CSV)から</h3>
+            <input type="file" id="csv-file" accept=".csv">
+            <button class="btn" onclick="importCSV()">読み込む</button>
+        </div>
+        <div>
+            <h3>ここで登録</h3>
+            <input type="text" id="new-en" placeholder="英語 (必須)">
+            <input type="text" id="new-ja" placeholder="日本語 (必須)">
+            <input type="text" id="new-type" placeholder="品詞">
+            <input type="number" id="new-no" placeholder="番号 (空欄で自動採番)">
+            <button class="btn" onclick="manualAddWord()">登録</button>
+        </div>
+        <button class="btn btn-outline" onclick="goBackToVocab()">戻る</button>
+    </div>
+
+    <div id="screen-daily-set" class="hidden">
+        <h2>本日のセット設定</h2>
+        <p>今日学習する範囲を保存します。</p>
+        <label>範囲 (Start - End)</label>
+        <div style="display:flex; gap:10px;">
+            <input type="number" id="daily-start" value="1">
+            <input type="number" id="daily-end" value="50">
+        </div>
+        <button class="btn" onclick="saveDailySettings()">設定を保存</button>
+        <button class="btn btn-outline" onclick="goBackToVocab()">戻る</button>
+    </div>
+    
+    <div id="screen-other" class="hidden">
+        <h2>データ管理</h2>
+        <button class="btn btn-warning" onclick="clearWeakData()">苦手リストのデータを削除</button>
+        <button class="btn btn-danger" onclick="clearAllData()">すべてのデータを削除</button>
+        <button class="btn btn-outline" onclick="goBackToVocab()">戻る</button>
+    </div>
+
+    <div id="screen-list" class="hidden">
+        <h2>登録単語一覧</h2>
+        <input type="text" id="list-search" placeholder="検索 (英語または日本語)" onkeyup="filterWordList()">
+        <p style="text-align:right; font-size:0.8rem;">登録数: <span id="list-total-count">0</span>件</p>
+        <div id="word-list-area" class="word-list-container">
+            </div>
+        <button class="btn btn-outline" onclick="goBackToVocab()" style="margin-top:10px;">戻る</button>
+    </div>
+
+</div>
+
+<script>
+/* ========================================
+  データ構造と初期化
+  ========================================
+*/
+const initialData = [
+    {no:1, en:"change", ja:"変える", type:"動詞"},
+    {no:2, en:"learn", ja:"学ぶ", type:"動詞"},
+    {no:3, en:"help", ja:"手伝う", type:"動詞"},
+    {no:4, en:"need", ja:"必要とする", type:"動詞"},
+    {no:5, en:"live", ja:"住んでいる", type:"動詞"},
+    {no:6, en:"ask", ja:"頼む", type:"動詞"},
+    {no:7, en:"enjoy", ja:"楽しむ", type:"動詞"},
+    {no:8, en:"wait", ja:"待つ", type:"動詞"},
+    {no:9, en:"cook", ja:"調理する", type:"動詞"},
+    {no:10, en:"talk", ja:"話す", type:"動詞"},
+    {no:11, en:"speak", ja:"話す", type:"動詞"},
+    {no:12, en:"meet", ja:"会う", type:"動詞"},
+    {no:13, en:"mean", ja:"意味する", type:"動詞"},
+    {no:14, en:"buy", ja:"買う", type:"動詞"},
+    {no:15, en:"travel", ja:"旅行する", type:"動詞"}
+];
+
+let allWords = JSON.parse(localStorage.getItem('allWords')) || initialData;
+let userStats = JSON.parse(localStorage.getItem('userStats')) || {}; 
+let dailySettings = JSON.parse(localStorage.getItem('dailySettings')) || { start: 1, end: 10 };
+
+let sessionQueue = []; 
+let currentWordIndex = 0;
+let sessionMode = ''; 
+let sessionConfig = {}; 
+let dailyFlowStep = 0; 
+
+window.onload = () => {
+    updateBookSelect();
+    
+    // スペル入力欄でのエンターキー監視
+    document.getElementById('spell-input').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            if (!document.getElementById('test-next-btn').classList.contains('hidden')) {
+                nextTestProblem();
+            } else {
+                checkSpell();
+            }
+        }
+    });
+};
+
+/* ========================================
+  画面遷移コントロール
+  ========================================
+*/
+function hideAllScreens() {
+    document.querySelectorAll('[id^="screen-"]').forEach(el => el.classList.add('hidden'));
+}
+function goHome() { hideAllScreens(); document.getElementById('screen-menu').classList.remove('hidden'); }
+function showSubMenu(type) { hideAllScreens(); document.getElementById(`screen-${type}-menu`).classList.remove('hidden'); }
+function goBackToVocab() { hideAllScreens(); document.getElementById('screen-vocab-menu').classList.remove('hidden'); }
+
+/* ========================================
+  汎用ロジック
+  ========================================
+*/
+function updateMemoryState(wordNo, rating) {
+    if (!userStats[wordNo]) {
+        userStats[wordNo] = { interval: 0, nextReview: 0, isWeak: false };
+    }
+    let stat = userStats[wordNo];
+    let now = new Date().getTime();
+
+    if (rating <= 2) { 
+        stat.isWeak = true;
+        stat.interval = 1; 
+    } else { 
+        stat.isWeak = false;
+        if (stat.interval === 0) stat.interval = 1;
+        else if (stat.interval === 1) stat.interval = 3;
+        else stat.interval = Math.ceil(stat.interval * 1.5);
+    }
+    stat.nextReview = now + (stat.interval * 24 * 60 * 60 * 1000);
+    userStats[wordNo] = stat;
+    saveData();
+}
+
+function saveData() {
+    localStorage.setItem('allWords', JSON.stringify(allWords));
+    localStorage.setItem('userStats', JSON.stringify(userStats));
+    localStorage.setItem('dailySettings', JSON.stringify(dailySettings));
+}
+
+/* ========================================
+  機能: 単語一覧 (削除機能付き)
+  ========================================
+*/
+function showWordListScreen() {
+    hideAllScreens();
+    document.getElementById('screen-list').classList.remove('hidden');
+    document.getElementById('list-total-count').innerText = allWords.length;
+    filterWordList(); 
+}
+
+function filterWordList() {
+    const query = document.getElementById('list-search').value.toLowerCase();
+    const container = document.getElementById('word-list-area');
+    container.innerHTML = '';
+
+    let count = 0;
+    for (let w of allWords) {
+        if (count > 200) break; // 描画負荷軽減
+        if (w.en.toLowerCase().includes(query) || w.ja.includes(query)) {
+            let div = document.createElement('div');
+            div.className = 'list-item';
+            // 削除ボタンを追加
+            div.innerHTML = `
+                <div style="flex-grow:1;">
+                    <div class="list-en">No.${w.no} ${w.en}</div>
+                    <div class="list-ja">${w.ja}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:0.8em; color:#999; margin-bottom:5px;">${w.type}</div>
+                    <button class="btn-delete-small" onclick="deleteWord(${w.no})">削除</button>
+                </div>
+            `;
+            container.appendChild(div);
+            count++;
+        }
+    }
+}
+
+function deleteWord(no) {
+    if(!confirm(`No.${no} を削除してもよろしいですか？\nこの操作は取り消せません。`)) return;
+    
+    // 配列から削除
+    const idx = allWords.findIndex(w => w.no === no);
+    if (idx > -1) {
+        allWords.splice(idx, 1);
+        
+        // 関連する学習データ(userStats)も削除（任意ですがゴミ掃除として）
+        delete userStats[no];
+        
+        saveData();
+        alert("削除しました");
+        
+        // リスト再描画
+        document.getElementById('list-total-count').innerText = allWords.length;
+        filterWordList();
+    } else {
+        alert("エラー: 削除対象が見つかりませんでした");
+    }
+}
+
+/* ========================================
+  機能1: 暗記モード
+  ========================================
+*/
+function showSettings(mode) {
+    hideAllScreens();
+    document.getElementById('screen-settings').classList.remove('hidden');
+}
+
+function updateBookSelect() {
+    let sel = document.getElementById('book-select');
+    sel.innerHTML = '<option value="main">ターゲット1200 (CSV含む)</option>';
+}
+
+function startMemorizeMode() {
+    const s = parseInt(document.getElementById('range-start').value);
+    const e = parseInt(document.getElementById('range-end').value);
+    const dir = document.getElementById('question-direction').value;
+
+    sessionQueue = allWords.filter(w => w.no >= s && w.no <= e);
+    if (sessionQueue.length === 0) { alert("該当する単語がありません"); return; }
+
+    sessionMode = 'memorize';
+    sessionConfig = { direction: dir };
+    currentWordIndex = 0;
+    
+    hideAllScreens();
+    document.getElementById('screen-memorize').classList.remove('hidden');
+    renderMemorizeCard();
+}
+
+function renderMemorizeCard() {
+    if (currentWordIndex >= sessionQueue.length) {
+        if (sessionMode === 'daily_flow') {
+            nextDailyFlowStep();
+        } else {
+            alert("学習終了！");
+            goBackToVocab();
+        }
+        return;
+    }
+
+    const word = sessionQueue[currentWordIndex];
+    const isEnToJa = sessionConfig.direction === 'en-ja';
+    
+    document.getElementById('mem-count').innerText = (sessionQueue.length - currentWordIndex);
+    document.getElementById('mem-q').innerText = isEnToJa ? word.en : word.ja;
+    document.getElementById('mem-a').innerText = isEnToJa ? word.ja : word.en;
+    document.getElementById('mem-a').classList.add('hidden');
+    document.getElementById('mem-rating').classList.add('hidden');
+    document.getElementById('mem-hint').classList.remove('hidden');
+}
+
+function flipCard() {
+    document.getElementById('mem-a').classList.remove('hidden');
+    document.getElementById('mem-rating').classList.remove('hidden');
+    document.getElementById('mem-hint').classList.add('hidden');
+}
+
+function rateWord(rating) {
+    const word = sessionQueue[currentWordIndex];
+    updateMemoryState(word.no, rating);
+    currentWordIndex++;
+    renderMemorizeCard();
+}
+
+/* ========================================
+  機能2: 単語テスト
+  ========================================
+*/
+function showTestMenu() {
+    hideAllScreens();
+    document.getElementById('screen-test-menu').classList.remove('hidden');
+}
+
+function setupTest(type, dir) {
+    const s = dailySettings.start;
+    const e = dailySettings.end;
+    sessionQueue = allWords.filter(w => w.no >= s && w.no <= e);
+    startTestRun(type, dir);
+}
+
+function setupReviewTest() {
+    const now = new Date().getTime();
+    sessionQueue = allWords.filter(w => {
+        const stat = userStats[w.no];
+        if (!stat) return false;
+        return stat.isWeak || (stat.nextReview <= now);
+    });
+
+    if(sessionQueue.length === 0) { alert("現在、復習が必要な問題はありません！"); return; }
+    startTestRun('choice', 'en-ja'); 
+}
+
+function startTestRun(type, dir) {
+    if (sessionQueue.length === 0) { alert("問題がありません"); return; }
+    sessionQueue.sort(() => Math.random() - 0.5);
+
+    sessionConfig = { direction: dir, type: type };
+    currentWordIndex = 0;
+
+    hideAllScreens();
+    document.getElementById('screen-test-menu').classList.add('hidden');
+    document.getElementById('screen-test-run').classList.remove('hidden');
+    document.getElementById('test-mode-label').innerText = (type === 'choice' ? '4択' : 'スペル') + 'テスト';
+    
+    renderTestProblem();
+}
+
+function renderTestProblem() {
+    if (currentWordIndex >= sessionQueue.length) {
+        if (sessionMode === 'daily_flow') {
+            nextDailyFlowStep();
+        } else {
+            alert("テスト終了！");
+            goBackToVocab();
+        }
+        return;
+    }
+
+    const word = sessionQueue[currentWordIndex];
+    const isEnToJa = sessionConfig.direction === 'en-ja';
+
+    // UIリセット
+    document.getElementById('test-current').innerText = currentWordIndex + 1;
+    document.getElementById('test-total').innerText = sessionQueue.length;
+    document.getElementById('test-feedback').classList.add('hidden');
+    document.getElementById('test-next-btn').classList.add('hidden');
+    
+    document.getElementById('area-choice').classList.add('hidden');
+    document.getElementById('area-spell').classList.add('hidden');
+    document.getElementById('btn-spell-answer').classList.remove('hidden');
+
+    document.getElementById('spell-input').value = '';
+
+    // 問題表示
+    document.getElementById('test-q').innerText = isEnToJa ? word.en : word.ja;
+
+    // タイプに応じて表示エリア切り替え
+    if (sessionConfig.type === 'choice') {
+        document.getElementById('area-choice').classList.remove('hidden');
+        generateChoices(word, isEnToJa);
+    } else {
+        document.getElementById('area-spell').classList.remove('hidden');
+        document.getElementById('spell-input').focus();
+    }
+}
+
+function generateChoices(correctWord, isEnToJa) {
+    const container = document.getElementById('area-choice');
+    container.innerHTML = '';
+
+    let rangeWords = allWords.filter(w => w.no !== correctWord.no);
+    let distractors = [];
+    while(distractors.length < 3 && rangeWords.length > 0) {
+        let r = Math.floor(Math.random() * rangeWords.length);
+        distractors.push(rangeWords[r]);
+        rangeWords.splice(r, 1);
+    }
+    
+    let options = [...distractors, correctWord];
+    options.sort(() => Math.random() - 0.5);
+
+    options.forEach(opt => {
+        let btn = document.createElement('div');
+        btn.className = 'option-btn';
+        btn.innerText = isEnToJa ? opt.ja : opt.en;
+        btn.onclick = () => checkAnswer(opt.no === correctWord.no, correctWord);
+        container.appendChild(btn);
+    });
+}
+
+function checkSpell() {
+    const word = sessionQueue[currentWordIndex];
+    const input = document.getElementById('spell-input').value.trim();
+    const isCorrect = input.toLowerCase() === word.en.toLowerCase();
+    
+    document.getElementById('btn-spell-answer').classList.add('hidden');
+    checkAnswer(isCorrect, word);
+}
+
+function checkAnswer(isCorrect, wordObj) {
+    const feedback = document.getElementById('test-feedback');
+    feedback.classList.remove('hidden');
+    
+    document.getElementById('test-next-btn').classList.remove('hidden');
+    document.getElementById('test-next-btn').focus(); 
+    
+    let rating = isCorrect ? 4 : 1;
+    updateMemoryState(wordObj.no, rating);
+
+    if (isCorrect) {
+        feedback.innerText = "正解！";
+        feedback.style.color = "green";
+    } else {
+        feedback.innerText = `不正解... 正解は: ${wordObj.en} / ${wordObj.ja}`;
+        feedback.style.color = "red";
+    }
+}
+
+function nextTestProblem() {
+    currentWordIndex++;
+    renderTestProblem();
+}
+
+/* ========================================
+  機能: 本日のセット / 苦手チェック (Flow制御)
+  ========================================
+*/
+function showDailySettings() {
+    hideAllScreens();
+    document.getElementById('screen-daily-set').classList.remove('hidden');
+    document.getElementById('daily-start').value = dailySettings.start;
+    document.getElementById('daily-end').value = dailySettings.end;
+}
+
+function saveDailySettings() {
+    dailySettings.start = parseInt(document.getElementById('daily-start').value);
+    dailySettings.end = parseInt(document.getElementById('daily-end').value);
+    saveData();
+    alert("設定を保存しました");
+    goBackToVocab();
+}
+
+function startDailySetFlow() {
+    const s = dailySettings.start;
+    const e = dailySettings.end;
+    const rangeList = allWords.filter(w => w.no >= s && w.no <= e);
+    
+    if(rangeList.length === 0) { alert("範囲指定が正しくありません"); return; }
+
+    sessionMode = 'daily_flow';
+    dailyFlowStep = 0; 
+    sessionQueue = [...rangeList]; 
+    sessionConfig = { direction: 'en-ja' }; 
+    currentWordIndex = 0;
+    
+    hideAllScreens();
+    document.getElementById('screen-memorize').classList.remove('hidden');
+    alert("【本日のセット】\nまずは「単語を暗記」からスタートします。");
+    renderMemorizeCard();
+}
+
+function startWeakCheck() {
+    const now = new Date().getTime();
+    let weakList = allWords.filter(w => {
+        const stat = userStats[w.no];
+        return stat && (stat.isWeak || stat.nextReview <= now);
+    });
+
+    if (weakList.length === 0) { alert("苦手・復習対象の単語はありません！優秀です！"); return; }
+
+    sessionMode = 'daily_flow'; 
+    dailyFlowStep = 0;
+    sessionQueue = [...weakList]; 
+    sessionConfig = { direction: 'en-ja' }; 
+    currentWordIndex = 0;
+    
+    hideAllScreens();
+    document.getElementById('screen-memorize').classList.remove('hidden');
+    alert("【苦手チェック】\n苦手・復習リストの学習を開始します。");
+    renderMemorizeCard();
+}
+
+function nextDailyFlowStep() {
+    let baseList = [...sessionQueue]; 
+    
+    if (dailyFlowStep === 0) {
+        baseList.sort(() => Math.random() - 0.5);
+        const half = Math.ceil(baseList.length / 2);
+        
+        dailyFlowStep = 1;
+        sessionQueue = baseList.slice(0, half);
+        sessionConfig = { direction: 'en-ja', type: 'choice' };
+        currentWordIndex = 0;
+        
+        document.getElementById('app').dataset.secondHalf = JSON.stringify(baseList.slice(half));
+
+        hideAllScreens();
+        document.getElementById('screen-test-run').classList.remove('hidden');
+        alert("暗記完了！\n次は、範囲の半分を「4択問題」でテストします。");
+        document.getElementById('test-mode-label').innerText = "テスト: 4択";
+        renderTestProblem();
+
+    } else if (dailyFlowStep === 1) {
+        dailyFlowStep = 2;
+        let secondHalf = JSON.parse(document.getElementById('app').dataset.secondHalf || "[]");
+        sessionQueue = secondHalf;
+        
+        if (sessionQueue.length === 0) {
+            alert("すべてのセットが完了しました！");
+            goBackToVocab();
+            return;
+        }
+
+        sessionConfig = { direction: 'ja-en', type: 'spell' };
+        currentWordIndex = 0;
+        
+        hideAllScreens();
+        document.getElementById('screen-test-run').classList.remove('hidden');
+        alert("4択完了！\n最後は、残りの半分を「スペルテスト」します。");
+        document.getElementById('test-mode-label').innerText = "テスト: スペル";
+        renderTestProblem();
+
+    } else {
+        alert("学習セット完了！お疲れ様でした！");
+        goBackToVocab();
+    }
+}
+
+/* ========================================
+  機能: 単語追加 / 削除
+  ========================================
+*/
+function showAddWordMenu() {
+    hideAllScreens();
+    document.getElementById('screen-add').classList.remove('hidden');
+}
+
+function manualAddWord() {
+    const en = document.getElementById('new-en').value;
+    const ja = document.getElementById('new-ja').value;
+    const type = document.getElementById('new-type').value || 'その他';
+    let no = document.getElementById('new-no').value;
+
+    if (!en || !ja) { alert("英語と日本語は必須です"); return; }
+    if (!no) {
+        const maxNo = allWords.reduce((max, w) => (w.no > max ? w.no : max), 0);
+        no = maxNo + 1;
+    } else {
+        no = parseInt(no);
+    }
+    const newWord = { no: no, en: en, ja: ja, type: type };
+    allWords.push(newWord);
+    saveData();
+    alert(`登録しました: No.${no} ${en}`);
+    document.getElementById('new-en').value = '';
+    document.getElementById('new-ja').value = '';
+}
+
+function importCSV() {
+    const fileInput = document.getElementById('csv-file');
+    const file = fileInput.files[0];
+    if (!file) { alert("ファイルを選択してください"); return; }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const text = e.target.result;
+        const lines = text.split('\n');
+        let count = 0;
+        lines.forEach(line => {
+            const cols = line.split(','); 
+            if (cols.length >= 2) {
+                const no = parseInt(cols[0]);
+                if (!isNaN(no)) {
+                    const existingIdx = allWords.findIndex(w => w.no === no);
+                    const wordObj = {
+                        no: no,
+                        en: cols[1].trim(),
+                        ja: cols[2] ? cols[2].trim() : "",
+                        type: cols[3] ? cols[3].trim() : ""
+                    };
+                    if (existingIdx >= 0) allWords[existingIdx] = wordObj;
+                    else allWords.push(wordObj);
+                    count++;
+                }
+            }
+        });
+        saveData();
+        alert(`${count}件のデータを読み込みました`);
+    };
+    reader.readAsText(file);
+}
+
+function showOtherMenu() {
+    hideAllScreens();
+    document.getElementById('screen-other').classList.remove('hidden');
+}
+
+function clearWeakData() {
+    if(!confirm("苦手リスト（学習履歴）をリセットしますか？")) return;
+    userStats = {};
+    saveData();
+    alert("リセットしました");
+}
+
+function clearAllData() {
+    if(!confirm("すべてのデータ（追加した単語含む）を削除しますか？")) return;
+    localStorage.removeItem('allWords');
+    localStorage.removeItem('userStats');
+    localStorage.removeItem('dailySettings');
+    location.reload();
+}
+</script>
+</body>
+</html>
