@@ -723,57 +723,5 @@ function clearAllData() {
     location.reload();
 }
 </script>
-    // 1. Firebaseの設定（あなたの情報に書き換えてください）
-const firebaseConfig = {
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyAE_t9vWiUGW1JyEtqyJyYeKj1lFhxwPFI",
-  authDomain: "english-study-app-9f310.firebaseapp.com",
-  databaseURL: "https://english-study-app-9f310-default-rtdb.firebaseio.com",
-  projectId: "english-study-app-9f310",
-  storageBucket: "english-study-app-9f310.firebasestorage.app",
-  messagingSenderId: "848031496746",
-  appId: "1:848031496746:web:7e973e360e0647824f6153"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-};
-
-// 2. 初期化
-firebase.initializeApp(firebaseConfig);
-const database = firebase.database();
-
-// 3. データの保存方法を「localStorage」から「Firebase」に変更
-function saveData() {
-    // ローカル（ブラウザ）にも一応保存
-    localStorage.setItem('allWords', JSON.stringify(allWords));
-    localStorage.setItem('userStats', JSON.stringify(userStats));
-    
-    // インターネット（Firebase）に保存！
-    firebase.database().ref('userData').set({
-        allWords: allWords,
-        userStats: userStats,
-        dailySettings: dailySettings
-    });
-}
-
-// 4. ページを開いた時にFirebaseからデータを読み込む
-window.onload = () => {
-    firebase.database().ref('userData').once('value').then((snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-            allWords = data.allWords || initialData;
-            userStats = data.userStats || {};
-            dailySettings = data.dailySettings || { start: 1, end: 10 };
-            console.log("同期完了！");
-        }
-    });
-};
 </body>
 </html>
